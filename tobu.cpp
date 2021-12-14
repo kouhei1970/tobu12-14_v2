@@ -52,26 +52,26 @@ const float Tc_angl = 0.018;
 const float Tc_rate = 0.012;
 
 //PID Gain
-const float Kp_phi = 3.3;//3.5;
-const float Ti_phi = 9000.0;
-const float Td_phi = 0.0020;//0.0015
+const float Kp_phi = 3.4;//3.5;
+const float Ti_phi = 7600.0;
+const float Td_phi = 0.008;//0.0015
 
-const float Kp_theta = 3.0;
+const float Kp_theta = 3.2;
 const float Ti_theta = 7600.0;
-const float Td_theta = 0.0020;//0.0015
+const float Td_theta = 0.008;//0.0015
 
 const float Kp_psi = 0.7;
 
-const float Kp_p = 0.21;//0.20;
-const float Ti_p = 50000.0;
-const float Td_p = 0.0;
+const float Kp_p = 0.6;//0.20;
+const float Ti_p = 26000.0;
+const float Td_p = 0.01;
 
-const float Kp_q = 0.300;//0.29
-const float Ti_q = 45000.0;
-const float Td_q = 0.0;
+const float Kp_q = 0.4;//0.29
+const float Ti_q = 26000.0;
+const float Td_q = 0.01;
 
-const float Kp_r = 0.72;
-const float Ti_r = 50000.0;
+const float Kp_r = 0.9;
+const float Ti_r = 10000.0;
 const float Td_r = 0.0;
 
 //for Motor control
@@ -98,6 +98,95 @@ volatile float data2MID,data4MID;
 volatile float Time_for_debug = 0.0;
 #endif
 /*--------------------------------------------------------------------------------------------------------------------------------------*/
+void init_kalman(float mx, float my, float mz)
+{
+  Xe << 1.00, 0.0, 0.0, 0.0, mx, my, mz;
+  Xp =Xe;
+/*
+  Q <<  0.00872, 0.0   , 0.0     , 0.0   , 0.0   , 0.0,
+        0.0   , 0.00198, 0.0     , 0.0   , 0.0   , 0.0,
+        0.0   , 0.0   , 0.000236 , 0.0   , 0.0   , 0.0,
+        0.0   , 0.0   , 0.0      , 0.5e-5, 0.0   , 0.0,
+        0.0   , 0.0   , 0.0      , 0.0   , 0.5e-5, 0.0,
+        0.0   , 0.0   , 0.0      , 0.0   , 0.0   , 0.1e0;
+  R <<  1e-1   , 0.0    , 0.0    , 0.0     , 0.0     , 0.0,
+        0.0    , 1e-1   , 0.0    , 0.0     , 0.0     , 0.0,
+        0.0    , 0.0    , 5e-1   , 0.0     , 0.0     , 0.0,
+        0.0    , 0.0    , 0.0    , 1e-2    , 0.0     , 0.0,
+        0.0    , 0.0    , 0.0    , 0.0     , 1e-2    , 0.0,
+        0.0    , 0.0    , 0.0    , 0.0     , 0.0     , 1e-3;
+*/
+  Q <<  1.0e-5, 0.0   , 0.0     , 0.0   , 0.0   , 0.0,
+        0.0   , 1.0e-5, 0.0     , 0.0   , 0.0   , 0.0,
+        0.0   , 0.0   , 1.0e-5 , 0.0   , 0.0   , 0.0,
+        0.0   , 0.0   , 0.0      , 0.5e-6, 0.0   , 0.0,
+        0.0   , 0.0   , 0.0      , 0.0   , 0.2e-6, 0.0,
+        0.0   , 0.0   , 0.0      , 0.0   , 0.0   , 0.1e-6;
+
+  R <<  1e-1   , 0.0    , 0.0    , 0.0     , 0.0     , 0.0,
+        0.0    , 1e-1   , 0.0    , 0.0     , 0.0     , 0.0,
+        0.0    , 0.0    , 5e-1   , 0.0     , 0.0     , 0.0,
+        0.0    , 0.0    , 0.0    , 1e-4    , 0.0     , 0.0,
+        0.0    , 0.0    , 0.0    , 0.0     , 1e-4    , 0.0,
+        0.0    , 0.0    , 0.0    , 0.0     , 0.0     , 1e-2;
+
+
+  G << -1.0,-1.0,-1.0, 0.0, 0.0, 0.0, 
+        1.0,-1.0, 1.0, 0.0, 0.0, 0.0, 
+        1.0, 1.0,-1.0, 0.0, 0.0, 0.0, 
+       -1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 
+        0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 
+        0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 
+        0.0, 0.0, 0.0, 0.0, 0.0, 1.0;
+
+  Beta << 0.0, 0.0, 0.0;
+
+  P <<  1e0,   0,   0,   0,     0,     0,     0,  
+          0, 1e0,   0,   0,     0,     0,     0,
+          0,   0, 1e0,   0,     0,     0,     0,
+          0,   0,   0, 1e0,     0,     0,     0, 
+          0,   0,   0,   0, 1.0e0,     0,     0,  
+          0,   0,   0,   0,     0, 1.0e0,     0,  
+          0,   0,   0,   0,     0,     0, 1.0e0;
+}
+
+void read_sensor(void)
+{
+  float mx1,my1,mz1;
+
+  imu_mag_data_read();
+  Ax=   -acceleration_mg[0]*0.001*GRAV;
+  Ay=   -acceleration_mg[1]*0.001*GRAV;
+  Az=    acceleration_mg[2]*0.001*GRAV;
+  Wp=    angular_rate_mdps[0]*0.001*0.017453292;
+  Wq=    angular_rate_mdps[1]*0.001*0.017453292;
+  Wr=   -angular_rate_mdps[2]*0.001*0.017453292;
+  Dmx=  -(magnetic_field_mgauss[0]);
+  Dmy=   (magnetic_field_mgauss[1]);
+  Dmz=  -(magnetic_field_mgauss[2]);
+
+  //回転行列
+  const float rot[9]={-0.78435472, -0.62015392, -0.01402787,
+    0.61753358, -0.78277935,  0.07686857,
+    -0.05865107,  0.05162955,  0.99694255};
+  //中心座標
+  const float center[3]={-109.32529343620176, 72.76584808916506, 759.2285249891385};
+  //拡大係数
+  const float zoom[3]={0.002034773458122364, 0.002173892202021849, 0.0021819494099235273};
+
+  //回転・平行移動・拡大
+  mx1 = zoom[0]*( rot[0]*Dmx +rot[1]*Dmy +rot[2]*Dmz -center[0]);
+  my1 = zoom[1]*( rot[3]*Dmx +rot[4]*Dmy +rot[5]*Dmz -center[1]);
+  mz1 = zoom[2]*( rot[6]*Dmx +rot[7]*Dmy +rot[8]*Dmz -center[2]);
+  //逆回転
+  Mx = rot[0]*mx1 +rot[3]*my1 +rot[6]*mz1;
+  My = rot[1]*mx1 +rot[4]*my1 +rot[7]*mz1;
+  Mz = rot[2]*mx1 +rot[5]*my1 +rot[8]*mz1; 
+  float mag_norm=sqrt(Mx*Mx +My*My +Mz*Mz);
+  Mx/=mag_norm;
+  My/=mag_norm;
+  Mz/=mag_norm;
+}
 
 void kalman(void){
 
@@ -169,10 +258,10 @@ void kalman(void){
         Logdata[Logcount++]=Ax;
         Logdata[Logcount++]=Ay;
         Logdata[Logcount++]=Az;
-        Logdata[Logcount++]=Dmx;//Mx;
-        Logdata[Logcount++]=Dmy;//My;
+        Logdata[Logcount++]=Mx;
+        Logdata[Logcount++]=My;
         
-        Logdata[Logcount++]=Dmz;//Mz;
+        Logdata[Logcount++]=Mz;
         Logdata[Logcount++]=Ref_p;
         Logdata[Logcount++]=Ref_q;
         Logdata[Logcount++]=Ref_r;
@@ -230,10 +319,10 @@ void kalman(void){
       Logcount = 0;
       Tlog = 0.0;
     }
-#if 1
+    
     //角度PID制御
 
-    Ref_phi = (Data4)*0.52398775598299*1.7;
+    Ref_phi = (Data4)*0.52398775598299*1.0;
     
     /*if(Data8<0.0){
       Ref_t = (Data2)*0.523598775598299*1.5;
@@ -297,8 +386,6 @@ void kalman(void){
     else{
       Sk_phi=0.0;
       Sk_t=0.0;
-      //Sphi=0.0;
-      //St=0.0;
       Ref_p = 0.0;
       Ref_q = 0.0;
       Ref_r = 0.0;
@@ -311,8 +398,7 @@ void kalman(void){
       //現在の角度（水平の姿勢）を記憶
       Phiav=Phi;
       Thetaav=Theta;
-      //data2MID=Data2;
-      //data4MID=Data4;
+      Psiav=Psi;
       Dk_phi = 0.0;//追加しました
       Dk_t = 0.0;  //追加しました
       //printf("%f  %f  %f  \n",Dmx,Dmy,Dmz);
@@ -321,7 +407,6 @@ void kalman(void){
 
     //printf("kalman %04f\n", Data6);    
 
-#endif
   
     //e_time=time_us_32();
     //d_time=e_time-s_time;
@@ -355,9 +440,12 @@ void MAINLOOP(void)
   float dk_p, dk_q, dk_r;
   float err_p, err_q, err_r;
   float p_rate, q_rate, r_rate;
-  
+
   //e エレベータ a エルロン r ラダー t スロットル
   pwm_clear_irq(2);
+
+
+#if 0
   imu_mag_data_read();
   Ax=   -acceleration_mg[0]*0.001*GRAV;
   Ay=   -acceleration_mg[1]*0.001*GRAV;
@@ -406,6 +494,8 @@ void MAINLOOP(void)
 
   //printf("%9.4f %12.5f %12.5f %12.5f\n",Time_for_debug, mx, my, mz );
   //Time_for_debug = Time_for_debug + 0.0025; 
+#endif
+  read_sensor();
 
   Hzcount=Hzcount+1;
   if(Hzcount==4){
@@ -716,90 +806,4 @@ int main(void)
   }
 
 }
-void read_sensor(void)
-{
-  float mx1,my1,mz1;
-
-  imu_mag_data_read();
-  Wp=    angular_rate_mdps[0]*0.001*0.017453292;
-  Wq=    angular_rate_mdps[1]*0.001*0.017453292;
-  Wr=   -angular_rate_mdps[2]*0.001*0.017453292;
-  Dmx=  -(magnetic_field_mgauss[0]);
-  Dmy=   (magnetic_field_mgauss[1]);
-  Dmz=  -(magnetic_field_mgauss[2]);
-
-  //回転行列
-  const float rot[9]={-0.78435472, -0.62015392, -0.01402787,
-    0.61753358, -0.78277935,  0.07686857,
-    -0.05865107,  0.05162955,  0.99694255};
-  //中心座標
-  const float center[3]={-109.32529343620176, 72.76584808916506, 759.2285249891385};
-  //拡大係数
-  const float zoom[3]={0.002034773458122364, 0.002173892202021849, 0.0021819494099235273};
-
-  //回転・平行移動・拡大
-  mx1 = zoom[0]*( rot[0]*Dmx +rot[1]*Dmy +rot[2]*Dmz -center[0]);
-  my1 = zoom[1]*( rot[3]*Dmx +rot[4]*Dmy +rot[5]*Dmz -center[1]);
-  mz1 = zoom[2]*( rot[6]*Dmx +rot[7]*Dmy +rot[8]*Dmz -center[2]);
-  //逆回転
-  Mx = rot[0]*mx1 +rot[3]*my1 +rot[6]*mz1;
-  My = rot[1]*mx1 +rot[4]*my1 +rot[7]*mz1;
-  Mz = rot[2]*mx1 +rot[5]*my1 +rot[8]*mz1; 
-  float mag_norm=sqrt(Mx*Mx +My*My +Mz*Mz);
-  Mx/=mag_norm;
-  My/=mag_norm;
-  Mz/=mag_norm;
-}
-void init_kalman(float mx, float my, float mz)
-{
-  Xe << 1.00, 0.0, 0.0, 0.0, mx, my, mz;
-  Xp =Xe;
-/*
-  Q <<  0.00872, 0.0   , 0.0     , 0.0   , 0.0   , 0.0,
-        0.0   , 0.00198, 0.0     , 0.0   , 0.0   , 0.0,
-        0.0   , 0.0   , 0.000236 , 0.0   , 0.0   , 0.0,
-        0.0   , 0.0   , 0.0      , 0.5e-5, 0.0   , 0.0,
-        0.0   , 0.0   , 0.0      , 0.0   , 0.5e-5, 0.0,
-        0.0   , 0.0   , 0.0      , 0.0   , 0.0   , 0.1e0;
-  R <<  1e-1   , 0.0    , 0.0    , 0.0     , 0.0     , 0.0,
-        0.0    , 1e-1   , 0.0    , 0.0     , 0.0     , 0.0,
-        0.0    , 0.0    , 5e-1   , 0.0     , 0.0     , 0.0,
-        0.0    , 0.0    , 0.0    , 1e-2    , 0.0     , 0.0,
-        0.0    , 0.0    , 0.0    , 0.0     , 1e-2    , 0.0,
-        0.0    , 0.0    , 0.0    , 0.0     , 0.0     , 1e-3;
-*/
-  Q <<  1.0e-5, 0.0   , 0.0     , 0.0   , 0.0   , 0.0,
-        0.0   , 1.0e-5, 0.0     , 0.0   , 0.0   , 0.0,
-        0.0   , 0.0   , 1.0e-5 , 0.0   , 0.0   , 0.0,
-        0.0   , 0.0   , 0.0      , 0.5e-3, 0.0   , 0.0,
-        0.0   , 0.0   , 0.0      , 0.0   , 0.2e-3, 0.0,
-        0.0   , 0.0   , 0.0      , 0.0   , 0.0   , 0.1e-2;
-
-  R <<  1e-1   , 0.0    , 0.0    , 0.0     , 0.0     , 0.0,
-        0.0    , 1e-1   , 0.0    , 0.0     , 0.0     , 0.0,
-        0.0    , 0.0    , 5e-1   , 0.0     , 0.0     , 0.0,
-        0.0    , 0.0    , 0.0    , 1e-4    , 0.0     , 0.0,
-        0.0    , 0.0    , 0.0    , 0.0     , 1e-4    , 0.0,
-        0.0    , 0.0    , 0.0    , 0.0     , 0.0     , 1e-2;
-
-
-  G << -1.0,-1.0,-1.0, 0.0, 0.0, 0.0, 
-        1.0,-1.0, 1.0, 0.0, 0.0, 0.0, 
-        1.0, 1.0,-1.0, 0.0, 0.0, 0.0, 
-       -1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 
-        0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 
-        0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 
-        0.0, 0.0, 0.0, 0.0, 0.0, 1.0;
-
-  Beta << 0.0, 0.0, 0.0;
-
-  P <<  1e0,   0,   0,   0,     0,     0,     0,  
-          0, 1e0,   0,   0,     0,     0,     0,
-          0,   0, 1e0,   0,     0,     0,     0,
-          0,   0,   0, 1e0,     0,     0,     0, 
-          0,   0,   0,   0, 1.0e0,     0,     0,  
-          0,   0,   0,   0,     0, 1.0e0,     0,  
-          0,   0,   0,   0,     0,     0, 1.0e0;
-}
-
 
