@@ -51,9 +51,14 @@ volatile float Up=0.0,Uq=0.0,Ur=0.0;
 const float Tc_angl = 0.018;
 const float Tc_rate = 0.012;
 
+//Angle ref Offset
+const float Phi_offset   = -0.08;
+const float Theta_offset = -0.01;
+const float Psi_offset   = 0.00262;
+
 //PID Gain
 const float Kp_phi = 3.4;//3.5;
-const float Ti_phi = 7600.0;
+const float Ti_phi = 7100.0;
 const float Td_phi = 0.008;//0.0015
 
 const float Kp_theta = 3.2;
@@ -63,12 +68,12 @@ const float Td_theta = 0.008;//0.0015
 const float Kp_psi = 0.7;
 
 const float Kp_p = 0.6;//0.20;
-const float Ti_p = 26000.0;
-const float Td_p = 0.01;
+const float Ti_p = 18000.0;
+const float Td_p = 0.0075;
 
 const float Kp_q = 0.4;//0.29
-const float Ti_q = 26000.0;
-const float Td_q = 0.01;
+const float Ti_q = 18000.0;
+const float Td_q = 0.0075;
 
 const float Kp_r = 0.9;
 const float Ti_r = 10000.0;
@@ -87,8 +92,9 @@ float RockingWings();
 uint8_t Kalman_flag=1;
 uint8_t Rocking_flag=0;
 float Rocking_time=0.0;
-void init_kalman(float mx, float my, float mz);
 
+void init_kalman(float mx, float my, float mz);
+float rocking_wings(void);
 
 #if 0
 //volatile float PHI,THETA,PSI;
@@ -148,6 +154,19 @@ void init_kalman(float mx, float my, float mz)
           0,   0,   0,   0, 1.0e0,     0,     0,  
           0,   0,   0,   0,     0, 1.0e0,     0,  
           0,   0,   0,   0,     0,     0, 1.0e0;
+}
+
+float rocking_wings(void)
+{
+  float angle=20;
+  float f=2.0;
+
+  if(Rocking_time<3.0)
+  {
+    return angle*M_PI/180*sin(f*2*M_PI*Rocking_time);
+  }
+  return Theta_offset;
+
 }
 
 void read_sensor(void)
@@ -221,6 +240,7 @@ void kalman(void){
       Psi = CalcPsi(Xe);
     
       Kalman_time = Kalman_time + 0.01;
+      Rocking_time = Rocking_time + 0.01;
     }    //--Begin Extended Kalman Filter--
 
     //printf("%8.2f %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f\n",
@@ -251,9 +271,9 @@ void kalman(void){
 
         Logdata[Logcount++]=Xe(5,0);
         Logdata[Logcount++]=Xe(6,0);
-        Logdata[Logcount++]=Wp;
-        Logdata[Logcount++]=Wq;
-        Logdata[Logcount++]=Wr;
+        Logdata[Logcount++]=Wp-Wpa;
+        Logdata[Logcount++]=Wq-Wqa;
+        Logdata[Logcount++]=Wr-Wra;
         
         Logdata[Logcount++]=Ax;
         Logdata[Logcount++]=Ay;
@@ -322,19 +342,19 @@ void kalman(void){
     
     //角度PID制御
 
-    Ref_phi = (Data4)*0.52398775598299*1.0;
+    Ref_phi = (Data4)*0.52398775598299*1.0 + Phi_offset;
+    Ref_t   = (Data2)*0.523598775598299*1.7 + Theta_offset;
+    Ref_psi =  Data1*5.5 + Psi_offset;;
     
-    /*if(Data8<0.0){
-      Ref_t = (Data2)*0.523598775598299*1.5;
+    if(Data8 < 0.0){
       gpio_put(7,0);
+      Rocking_time=0.0;
     }
     else{
       gpio_put(7, 1);
-      Ref_t=RockingWings();
-    }*/
+      Ref_phi=rocking_wings();
+    }
 
-    Ref_t = (Data2)*0.523598775598299*1.7;
-    Ref_psi =  Data1*5.5;
 
     if(Data3>=0.25){
       //phi
@@ -443,58 +463,7 @@ void MAINLOOP(void)
 
   //e エレベータ a エルロン r ラダー t スロットル
   pwm_clear_irq(2);
-
-
-#if 0
-  imu_mag_data_read();
-  Ax=   -acceleration_mg[0]*0.001*GRAV;
-  Ay=   -acceleration_mg[1]*0.001*GRAV;
-  Az=    acceleration_mg[2]*0.001*GRAV;
-  Wp=    angular_rate_mdps[0]*0.001*0.017453292;
-  Wq=    angular_rate_mdps[1]*0.001*0.017453292;
-  Wr=   -angular_rate_mdps[2]*0.001*0.017453292;
-  Dmx=  -(magnetic_field_mgauss[0]);
-  Dmy=   (magnetic_field_mgauss[1]);
-  Dmz=  -(magnetic_field_mgauss[2]);
-  /*
-     回転行列
-     [[-0.78435472 -0.62015392 -0.01402787]
-     [ 0.61753358 -0.78277935  0.07686857]
-     [-0.05865107  0.05162955  0.99694255]]
-     中心座標
-     -109.32529343620176 72.76584808916506 759.2285249891385
-     W
-     0.5498054412471614
-     拡大係数
-     0.002034773458122364 0.002173892202021849 0.0021819494099235273
-    */
-
-  //回転行列
-  const float rot[9]={0.98816924, 0.14986289, -0.03259845,
-    -0.14988208, 0.98870212,  0.00186814,
-    0.003251012,  0.00303989,  0.99946678};
-  //中心座標
-  const float center[3]={245.084, 81.99799,762.78812};
-  //拡大係数
-  const float zoom[3]={0.0014399, 0.0022545, 0.0039835};
-
-
-  //回転・平行移動・拡大
-  mx1 = zoom[0]*( rot[0]*Dmx +rot[1]*Dmy +rot[2]*Dmz -center[0]);
-  my1 = zoom[1]*( rot[3]*Dmx +rot[4]*Dmy +rot[5]*Dmz -center[1]);
-  mz1 = zoom[2]*( rot[6]*Dmx +rot[7]*Dmy +rot[8]*Dmz -center[2]);
-  //逆回転
-  Mx = rot[0]*mx1 +rot[3]*my1 +rot[6]*mz1;
-  My = rot[1]*mx1 +rot[4]*my1 +rot[7]*mz1;
-  Mz = rot[2]*mx1 +rot[5]*my1 +rot[8]*mz1; 
-  mag_norm=sqrt(Mx*Mx +My*My +Mz*Mz);
-  Mx/=mag_norm;
-  My/=mag_norm;
-  Mz/=mag_norm;
-
-  //printf("%9.4f %12.5f %12.5f %12.5f\n",Time_for_debug, mx, my, mz );
-  //Time_for_debug = Time_for_debug + 0.0025; 
-#endif
+  
   read_sensor();
 
   Hzcount=Hzcount+1;
@@ -562,7 +531,7 @@ void MAINLOOP(void)
   Olderr2_r = Olderr1_r;
   Olderr1_r = err_r;
 
-  if(Kalman_time>20.0){
+  if(Kalman_time>15.0){
     if(Data3<0.1){
       if(Data2>0.9 && Data4>0.9 && Safetycount==0){
         Safetycount=1;
@@ -588,31 +557,12 @@ void MAINLOOP(void)
   }
 
 
-#if 1    
-  //Duty_rr=(float)(DUTYMAX-DUTYMIN)*Com_rr+DUTYMIN;
-  //Duty_fr=(float)(DUTYMAX-DUTYMIN)*Com_fr+DUTYMIN;
-  //Duty_rl=(float)(DUTYMAX-DUTYMIN)*Com_rl+DUTYMIN;
-  //Duty_fl=(float)(DUTYMAX-DUTYMIN)*Com_fl+DUTYMIN;
-
-  //if (Duty_rr>DUTYMAX-50.0)Duty_rr=DUTYMAX-50.0;
-  //if (Duty_rr<DUTYMIN+15.0)Duty_rr=DUTYMIN+15.0;
-  //if (Duty_fr>DUTYMAX-50.0)Duty_fr=DUTYMAX-50.0;
-  //if (Duty_fr<DUTYMIN+15.0)Duty_fr=DUTYMIN+15.0;
-  //if (Duty_rl>DUTYMAX-50.0)Duty_rl=DUTYMAX-50.0;
-  //if (Duty_rl<DUTYMIN+15.0)Duty_rl=DUTYMIN+15.0;
-  //if (Duty_fl>DUTYMAX-50.0)Duty_fl=DUTYMAX-50.0;
-  //if (Duty_fl<DUTYMIN+15.0)Duty_fl=DUTYMIN+15.0;
-
-  if(Data3<0.05 || Safetycount==1)
+  if(Data3<0.05 || Safetycount==1 || Safty_flag!=0)
   {
     set_duty_rr(0.0);
     set_duty_fr(0.0);
     set_duty_rl(0.0);
     set_duty_fl(0.0);
-    //pwm_set_chan_level(slice_num[0], PWM_CHAN_A, DUTYMIN);
-    //pwm_set_chan_level(slice_num[0], PWM_CHAN_B, DUTYMIN);
-    //pwm_set_chan_level(slice_num[1], PWM_CHAN_A, DUTYMIN);
-    //pwm_set_chan_level(slice_num[1], PWM_CHAN_B, DUTYMIN);
     Sk_p=0.0;
     Sk_q=0.0;
     Sk_r=0.0;
@@ -640,10 +590,6 @@ void MAINLOOP(void)
     set_duty_fr(Com_fr);
     set_duty_rl(Com_rl);
     set_duty_fl(Com_fl);
-    //pwm_set_chan_level(slice_num[0], PWM_CHAN_A, Duty_rr);
-    //pwm_set_chan_level(slice_num[0], PWM_CHAN_B, Duty_fr);
-    //pwm_set_chan_level(slice_num[1], PWM_CHAN_A, Duty_rl);
-    //pwm_set_chan_level(slice_num[1], PWM_CHAN_B, Duty_fl);
   }
   if(Data9>0.0){
     
@@ -653,7 +599,6 @@ void MAINLOOP(void)
     set_servo(2250);
   }
 
-#endif
 }
 /*-----------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -722,12 +667,6 @@ int main(void)
     
     Kalman_flag = 0;//Kalman filter 一時停止
     init_kalman(Wpa, Wqa, Wra);//カルマンフィルタ初期化
-    //Xe(4,0)=Wpa;
-    //Xe(5,0)=Wqa;
-    //Xe(6,0)=Wra;
-    //Xp(4,0)=Wpa;
-    //Xp(5,0)=Wqa;
-    //Xp(6,0)=Wra;
 
     printf("#omega ave %f %f %f\n",Wpa, Wqa, Wra);
     printf("#omega now %f %f %f\n",Wp, Wq, Wr);

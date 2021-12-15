@@ -9,6 +9,7 @@ uint slice_num[3];
 uint16_t Olddata[18];
 uint16_t Chdata[19];
 float Data1=0.0,Data2=0.0,Data3=0.0,Data4=0.0,Data5=0.0,Data6=0.0,Data7=0.0,Data8=0.0,Data9=0.0,Data10=0.0;
+uint16_t Safty_flag=0;
 
 //関数の宣言
 //uint8_t serial_settei(void);
@@ -279,6 +280,7 @@ void on_uart_rx(void) {
         break;
       case 24:
         Olddata[16] = sbus_data[23];
+        Safty_flag=Olddata[16];
         //printf("%04x ",Chdata[16]);
         break;
     }

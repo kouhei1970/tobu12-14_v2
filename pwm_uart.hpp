@@ -49,6 +49,7 @@
 #define UART_RX_PIN 1
 #define UART_TX_PIN 0
 extern float Data1,Data2,Data3,Data4,Data5,Data6,Data7,Data8,Data9,Data10;
+extern uint16_t Safty_flag;
 //extern uint slice_num[2];
 uint8_t serial_settei(void);
 uint8_t pwm_settei(void);
